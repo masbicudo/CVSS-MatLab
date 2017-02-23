@@ -36,8 +36,8 @@ Tests
 You can trust this package.
 More and more tests will be added so that bugs stay away from the code.
 
-Helping
--------
+Contributing
+------------
 
 Helping this project grow is easy.
 Just fork it, do what you want to do, and create a pull request.
@@ -51,9 +51,9 @@ Don't forget to follow these rules to maintain the quality:
 Contributors
 ------------
 
-Daniel S. Menasche - professor and researcher at UFRJ
-Matheus Martins - graduation student at UFRJ
-Miguel Angelo (masbicudo) - graduation student at UFRJ
+- Daniel S. Menasche - professor and researcher at UFRJ
+- Matheus Martins - graduation student at UFRJ
+- Miguel Angelo (masbicudo) - graduation student at UFRJ
 
 License
 -------
