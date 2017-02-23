@@ -85,6 +85,14 @@ classdef CVSS2
          
          prop_names = { 'AV', 'AC', 'Au', 'C', 'I', 'A', 'E', 'RL', 'RC', 'CR', 'IR', 'AR','CDP', 'TD' };
          group_names = { 'Base', 'Temporal', 'Environmental' };
+
+         default_temporal = 'E:ND/RL:ND/RC:ND';
+         best_temporal = 'E:U/RL:OF/RC:UC';
+         worst_temporal = 'E:H/RL:U/RC:C';
+         
+         default_environmental = 'CR:ND/IR:ND/AR:ND/CDP:ND/TD:ND';
+         best_environmental = 'CR:L/IR:L/AR:L/CDP:N/TD:N';
+         worst_environmental = 'CR:H/IR:H/AR:H/CDP:H/TD:H';
     end
     properties (SetAccess = private)
         % Base
@@ -104,7 +112,7 @@ classdef CVSS2
         CR = 'ND' % Confidentiality Req. [L,M,H,ND]
         IR = 'ND' % Integrity Req.       [L,M,H,ND]
         AR = 'ND' % Availability Req.    [L,M,H,ND]
-        
+
         CDP = 'ND' % Collateral Damage Potential [N,L,LM,MH,H,ND]
         TD  = 'ND' % Target Distribution         [N,L,M,H,ND]
     end
@@ -259,6 +267,25 @@ classdef CVSS2
     end
     
     methods
+        function [ O ] = WithDefaultTemporal(M)
+            O = M.Fill_Parse(CVSS2.default_temporal);
+        end
+        function [ O ] = WithBestTemporal(M)
+            O = M.Fill_Parse(CVSS2.best_temporal);
+        end
+        function [ O ] = WithWorstTemporal(M)
+            O = M.Fill_Parse(CVSS2.worst_temporal);
+        end
+        function [ O ] = WithDefaultEnvironmental(M)
+            O = M.Fill_Parse(CVSS2.default_environmental);
+        end
+        function [ O ] = WithBestEnvironmental(M)
+            O = M.Fill_Parse(CVSS2.best_environmental);
+        end
+        function [ O ] = WithWorstEnvironmental(M)
+            O = M.Fill_Parse(CVSS2.worst_environmental);
+        end
+        
         function retval = Base_Score(M)
             % BaseScore = round_to_1_decimal(((0.6*Impact)+(0.4*Exploitability)-1.5)*f(Impact))
             % f(impact) = 0 if Impact=0, 1.176 otherwise
@@ -310,11 +337,6 @@ classdef CVSS2
             %                  *(1-AvailImpact*AvailReq)))
             retval = min([10, 10.41*(1 - (1 - M.C*M.CR)*(1 - M.I*M.IR)*(1 - M.A*M.AR))]);
         end
-        
-        %function [ O ] = Clone( M )
-        %% Clone creates a copy of this CVSS2 instance.
-        %    O = M;
-        %end
         
         function [ O ] = Fill_Parse( M, input_string )
         % Reparse returns a new CVSS2 object with additional metrics from
