@@ -27,6 +27,44 @@ classdef CVSS2
             'CDP', struct('ND',0.00,  'N',0.00,  'L',0.10, 'LM',0.30, 'MH',0.40,  'H',0.50), ...
              'TD', struct('ND',1.00,  'N',0.00,  'L',0.25,  'M',0.75,  'H',1.00))
         
+        map_prop_names = struct( ...
+            'AV', 'Attack Vector', ...
+            'AC', 'Attack Complexity', ...
+            'Au', 'Authentication', ...
+            'C', 'Confidentiality', ...
+            'I', 'Integrity', ...
+            'A', 'Availability', ...
+            ...
+            'E', 'Exploit Code Maturity', ...
+            'RL', 'Remediation Level', ...
+            'RC', 'Report Confidence', ...
+            ...
+            'CR', 'Confidentiality Req.', ...
+            'IR', 'Integrity Req.', ...
+            'AR', 'Availability Req.', ...
+            'CDP', 'Collateral Damage Potential', ...
+            'TD', 'Target Distribution' ...
+            )
+        
+        map_prop_grups = struct( ...
+            'AV', 'Base', ...
+            'AC', 'Base', ...
+            'Au', 'Base', ...
+            'C', 'Base', ...
+            'I', 'Base', ...
+            'A', 'Base', ...
+            ...
+            'E', 'Temporal', ...
+            'RL', 'Temporal', ...
+            'RC', 'Temporal', ...
+            ...
+            'CR', 'Environmental', ...
+            'IR', 'Environmental', ...
+            'AR', 'Environmental', ...
+            'CDP', 'Environmental', ...
+            'TD', 'Environmental' ...
+            )
+        
         map_value_names = struct( ...
              'AV', struct( 'N', 'Network',  'A', 'Adjacent Network', 'L', 'Local'),                                                ...
              'AC', struct( 'H', 'High',     'M', 'Medium',  'L', 'Low'),                                                           ...
@@ -46,6 +84,7 @@ classdef CVSS2
              'TD', struct('ND', 'Not Defined', 'N', 'None', 'H', 'High',  'M', 'Medium',                          'L', 'Low'))
          
          prop_names = { 'AV', 'AC', 'Au', 'C', 'I', 'A', 'E', 'RL', 'RC', 'CR', 'IR', 'AR','CDP', 'TD' };
+         group_names = { 'Base', 'Temporal', 'Environmental' };
     end
     properties (SetAccess = private)
         % Base
@@ -65,7 +104,7 @@ classdef CVSS2
         CR = 'ND' % Confidentiality Req. [L,M,H,ND]
         IR = 'ND' % Integrity Req.       [L,M,H,ND]
         AR = 'ND' % Availability Req.    [L,M,H,ND]
-
+        
         CDP = 'ND' % Collateral Damage Potential [N,L,LM,MH,H,ND]
         TD  = 'ND' % Target Distribution         [N,L,M,H,ND]
     end
@@ -131,6 +170,57 @@ classdef CVSS2
             % end
         end
         
+        function [ M ] = Revert_Metrics( M, map )
+            names = fieldnames(M);
+            for i=1:size(names,1)
+                k = names{i};
+                if isfield(map, k) && isnumeric(M.(k))
+                    tbl2 = map.(k);
+                    val = M.(k);
+                    names2 = fieldnames(tbl2);
+                    for j=1:size(names2,1)
+                        k2 = names2{j};
+                        if tbl2.(k2) == val
+                            M.(k) = k2;
+                        end
+                    end
+                end
+            end
+        end
+
+        function [ str ] = Convert_To_CvssString( M, map, varargin )
+            opts = struct('IgnoreNotDefined', 0);
+            for a=1:2:nargin-2
+                opts.(varargin{a}) = varargin{a+1};
+            end
+            str = '';
+            names = fieldnames(M);
+            for i=1:size(names,1)
+                k = names{i};
+                if isfield(map, k)
+                    val = M.(k);
+                    if isnumeric(val)
+                        tbl2 = map.(k);
+                        names2 = fieldnames(tbl2);
+                        for j=1:size(names2,1)
+                            k2 = names2{j};
+                            if tbl2.(k2) == val
+                                val = k2;
+                            end
+                        end
+                    end
+                    ignore = ischar(val) && strcmp(val, 'ND') && opts.IgnoreNotDefined;
+                    if ~ignore
+                        if isempty(str)
+                            str = [k ':' val];
+                        else
+                            str = [str '/' k ':' val];
+                        end
+                    end
+                end
+            end
+        end
+
         function [ M ] = Parse_CVSS_String( input_string )
         % Parses a CVSS string
         %   This function reads the CVSS string in input_string
@@ -229,9 +319,37 @@ classdef CVSS2
         function [ O ] = Fill_Parse( M, input_string )
         % Reparse returns a new CVSS2 object with additional metrics from
         % the given string.
-            O = M;
-            O = CVSS2.Fill_CVSS_With_Parsed_String( O, input_string );
+            O = CVSS2.Fill_CVSS_With_Parsed_String( M, input_string );
             O = CVSS2.Replace_Metrics( O, CVSS2.lookup_table );
+        end
+        
+        function [ O ] = With_Strings( M )
+        % Converts this CVSS parameters to their equivalent string representations when possible.
+            O = CVSS2.Revert_Metrics( M, CVSS2.lookup_table );
+        end
+        
+        function [ str ] = ToString( M, varargin )
+        % Converts this CVSS object to it's equivalent string representation.
+            str = CVSS2.Convert_To_CvssString( M, CVSS2.lookup_table, varargin{:} );
+        end
+        
+        function ForEach( M, f, varargin )
+            names = CVSS2.prop_names;
+            for i=1:size(names,2)
+                k = names(i);
+                k = k{1};
+                val = M.(k);
+                fullVal = val;
+                if ischar(val)
+                    fullVal = CVSS2.map_value_names.(k).(val);
+                end
+                data = struct( ...
+                    'name', k, ...
+                    'value', val, ...
+                    'fullName', CVSS2.map_prop_names.(k), ...
+                    'fullValue', fullVal );
+                f(data, varargin{:});
+            end
         end
     end
 end
