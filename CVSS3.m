@@ -44,6 +44,58 @@ classdef CVSS3
             'MI' ,'I' , ...
             'MA' ,'A' )
         
+        map_prop_names = struct( ...
+             'AV', 'Attack Vector', ...
+             'AC', 'Attack Complexity', ...
+             'PR', 'Privileges Required', ...
+             'UI', 'User Interaction', ...
+              'S', 'Scope',
+              'C', 'Confidentiality', ...
+              'I', 'Integrity', ...
+              'A', 'Availability', ...
+            ...
+              'E', 'Exploit Code Maturity', ...
+             'RL', 'Remediation Level', ...
+             'RC', 'Report Confidence', ...
+            ...
+             'CR', 'Confidentiality Req.', ...
+             'IR', 'Integrity Req.', ...
+             'AR', 'Availability Req.', ...
+             'MS', 'Modified Scope', ...
+            'MAV', 'Modified Attack Vector', ...
+            'MAC', 'Modified Attack Complexity', ...
+            'MPR', 'Modified Privileges Required', ...
+            'MUI', 'Modified User Interaction', ...
+             'MC', 'Modified Confidentiality', ...
+             'MI', 'Modified Integrity', ...
+             'MA', 'Modified Availability')
+        
+        map_prop_grups = struct( ...
+             'AV', 'Base', ...
+             'AC', 'Base', ...
+             'PR', 'Base', ...
+             'UI', 'Base', ...
+              'S', 'Base',
+              'C', 'Base', ...
+              'I', 'Base', ...
+              'A', 'Base', ...
+            ...
+              'E', 'Temporal', ...
+             'RL', 'Temporal', ...
+             'RC', 'Temporal', ...
+            ...
+             'CR', 'Environmental', ...
+             'IR', 'Environmental', ...
+             'AR', 'Environmental', ...
+             'MS', 'Environmental', ...
+            'MAV', 'Environmental', ...
+            'MAC', 'Environmental', ...
+            'MPR', 'Environmental', ...
+            'MUI', 'Environmental', ...
+             'MC', 'Environmental', ...
+             'MI', 'Environmental', ...
+             'MA', 'Environmental')
+
         map_value_names = struct( ...
             'MS' , struct('X', 'Not Defined', 'U', 'Unchanged', 'C', 'Changed'),                                                ...
             'S'  , struct(                    'U', 'Unchanged', 'C', 'Changed'),                                                ...
@@ -67,6 +119,17 @@ classdef CVSS3
             'CR' , struct('X', 'Not Defined', 'H', 'High', 'M', 'Medium', 'L', 'Low'),                                          ...
             'IR' , struct('X', 'Not Defined', 'H', 'High', 'M', 'Medium', 'L', 'Low'),                                          ...
             'AR' , struct('X', 'Not Defined', 'H', 'High', 'M', 'Medium', 'L', 'Low')                                           )
+         
+         prop_names = { 'AV', 'AC', 'PR', 'UI', 'S', 'C', 'I', 'A', 'E', 'RL', 'RC', 'CR', 'IR', 'AR', 'MAV', 'MAC', 'MPR', 'MUI', 'MS', 'MC', 'MI', 'MA'  };
+         group_names = { 'Base', 'Temporal', 'Environmental' };
+
+         default_temporal = 'E:X/RL:X/RC:X';
+         best_temporal = 'E:U/RL:O/RC:U';
+         worst_temporal = 'E:H/RL:U/RC:C';
+         
+         default_environmental = 'CR:X/IR:X/AR:X/MS:X/MAV:X/MAC:X/MPR:X/MUI:X/MC:X/MI:X/MA:X';
+         best_environmental = 'CR:L/IR:L/AR:L/MS:U/MAV:P/MAC:H/MPR:H/MUI:R/MC:N/MI:N/MA:N';
+         worst_environmental = 'CR:H/IR:H/AR:H/MS:C/MAV:N/MAC:L/MPR:N/MUI:N/MC:H/MI:H/MA:H';
     end
     properties (SetAccess = private)
         % Base
@@ -88,7 +151,7 @@ classdef CVSS3
         CR = 'X' % Confidentiality Req. [X,H,M,L]
         IR = 'X' % Integrity Req.       [X,H,M,L]
         AR = 'X' % Availability Req.    [X,H,M,L]
-
+        
         MAV = 'X' % Modified Attack Vector         [X,N,A,L,P]
         MAC = 'X' % Modified Attack Complexity     [X,L,H]
         MPR = 'X' % Modified Privileges Required   [X,N,L,H]
@@ -98,22 +161,25 @@ classdef CVSS3
         MI  = 'X' % Modified Integrity             [X,H,L,N]
         MA  = 'X' % Modified Availability          [X,H,L,N]
     end
+    properties
+        RoundUnit = 0.1;
+    end
+    properties (Access = private)
+    end
     
     methods (Static)
-        function [ M ] = Parse_Metrics_String( input_string )
+        function [ M ] = Parse_Metrics_String( input_string, varargin )
         % Parses a CVSS string
         %   This function reads the CVSS string in input_string
         %   and generates a CVSS instance containig the numeric parameters.
+            opts = struct('IgnoreRequired', 0, 'Map', CVSS3.lookup_table);
+            for a=1:2:nargin-2
+                opts.(varargin{a}) = varargin{a+1};
+            end
 
-            M = CVSS3.Parse_Custom_String(input_string, CVSS3.lookup_table);
-        end
-        
-        function [ M ] = Parse_Custom_String( input_string, map )
-        % Parses a CVSS string
-        %   This function reads the CVSS string in input_string
-        %   and generates a CVSS instance containig custom parameters.
-
-            M = CVSS3.Parse_CVSS_String(input_string);
+            M = CVSS3();
+            M = CVSS3.Fill_CVSS_With_Parsed_String(M, input_string);
+            M = CVSS3.Replace_Metrics( M, opts.Map );
 
             % replacing string with numbers in the struct fields
             names = fieldnames(M);
@@ -134,6 +200,18 @@ classdef CVSS3
                     end
                 end
             end
+            
+            % checking required values
+            if ~opts.IgnoreRequired
+                if isempty(M.AV); error('CVSS3 parameter AV is required'); end;
+                if isempty(M.AC); error('CVSS3 parameter AC is required'); end;
+                if isempty(M.PR); error('CVSS3 parameter PR is required'); end;
+                if isempty(M.UI); error('CVSS3 parameter UI is required'); end;
+                if isempty(M.S ); error('CVSS3 parameter S is required') ; end;
+                if isempty(M.C ); error('CVSS3 parameter C is required') ; end;
+                if isempty(M.I ); error('CVSS3 parameter I is required') ; end;
+                if isempty(M.A ); error('CVSS3 parameter A is required') ; end;
+            end
         end
 
         function [ M ] = Parse_CVSS_String( input_string )
@@ -141,14 +219,20 @@ classdef CVSS3
         %   This function reads the CVSS string in input_string
         %   and generates a CVSS instance containig the string parameters.
 
-            M = CVSS3();
+            M = CVSS3.Fill_CVSS_With_Parsed_String( CVSS3(), input_string );
+        end
+        
+        function [ M ] = Fill_CVSS_With_Parsed_String( M, input_string )
+        % Parses a CVSS string
+        %   This function reads the CVSS string in input_string
+        %   and fills a CVSS instance with the string parameters.
 
             % converting the input_string to a struct
             input_string1 = strrep(input_string, ' ', '');
             pieces = strsplit(input_string1,'/');
-            for i=1:size(pieces,2)
+            for i=1:size(pieces,1)
                 kv = strsplit(pieces{i},':');
-                if isprop(M, kv{1})
+                if CVSS3.isprop(kv{1})
                     M.(upper(kv{1})) = upper(kv{2});
                 end
             end
@@ -164,12 +248,121 @@ classdef CVSS3
             end
         end
         
-        function retval = roundup(n)
-            retval = (ceil(10*n))/10;
+        function [ M ] = Replace_Metrics( M, map )
+            % replacing string with numbers in the struct fields
+            if ischar(M.AV) && ~isempty(M.AV);  M.AV  = map.AV.(M.AV);   end;
+            if ischar(M.AC) && ~isempty(M.AC);  M.AC  = map.AC.(M.AC);   end;
+            if ischar(M.Au) && ~isempty(M.Au);  M.Au  = map.Au.(M.Au);   end;
+            if ischar(M.C)  && ~isempty(M.C) ;  M.C   = map.C.(M.C);     end;
+            if ischar(M.I)  && ~isempty(M.I) ;  M.I   = map.I.(M.I);     end;
+            if ischar(M.A)  && ~isempty(M.A) ;  M.A   = map.A.(M.A);     end;
+
+            % Temporal
+            if ischar(M.E)  && ~isempty(M.E) ;  M.E   = map.E.(M.E);     end;
+            if ischar(M.RL) && ~isempty(M.RL);  M.RL  = map.RL.(M.RL);   end;
+            if ischar(M.RC) && ~isempty(M.RC);  M.RC  = map.RC.(M.RC);   end;
+
+            % Environmental
+            if ischar(M.CR) && ~isempty(M.CR);  M.CR  = map.CR.(M.CR);   end;
+            if ischar(M.IR) && ~isempty(M.IR);  M.IR  = map.IR.(M.IR);   end;
+            if ischar(M.AR) && ~isempty(M.AR);  M.AR  = map.AR.(M.AR);   end;
+
+            if ischar(M.CDP)&& ~isempty(M.CDP); M.CDP = map.CDP.(M.CDP); end;
+            if ischar(M.TD) && ~isempty(M.TD);  M.TD  = map.TD.(M.TD);   end;
+
+            % CODE BEFORE OPTIMIZATION
+            % names = fieldnames(M);
+            % for i=1:size(names,1)
+            %     k = names{i};
+            %     if isfield(map, k) && ischar(M.(k))
+            %         tbl2 = map.(k);
+            %         k2 = M.(k);
+            %         if isfield(tbl2, k2)
+            %             M.(k) = tbl2.(k2);
+            %         end
+            %     end
+            % end
+        end
+        
+        function [ M ] = Revert_Metrics( M, map )
+            names = fieldnames(map);
+            for i=1:size(names,1)
+                k = names{i};
+                if isfield(map, k) && isnumeric(M.(k))
+                    tbl2 = map.(k);
+                    val = M.(k);
+                    names2 = fieldnames(tbl2);
+                    for j=1:size(names2,1)
+                        k2 = names2{j};
+                        if tbl2.(k2) == val
+                            if strcmp(k, 'PR')
+                                M.PR = k2(1);
+                                M.S = k2(2);
+                            elseif strcmp(k, 'MPR')
+                                M.MPR = k2(1);
+                                M.MS = k2(2);
+                            else
+                                M.(k) = k2;
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        function [ str ] = Convert_To_CvssString( M, map, varargin )
+            opts = struct('IgnoreNotDefined', 0);
+            for a=1:2:nargin-2
+                opts.(varargin{a}) = varargin{a+1};
+            end
+            O = CVSS3.Revert_Metrics( M, map );
+            str = '';
+            names = fieldnames(M);
+            for i=1:size(names,1)
+                k = names{i};
+                if isfield(map, k)
+                    val = O.(k);
+                    ignore = ischar(val) && strcmp(val, 'X') && opts.IgnoreNotDefined;
+                    if ~ignore
+                        if isempty(str)
+                            str = [k ':' val];
+                        else
+                            str = [str '/' k ':' val];
+                        end
+                    end
+                end
+            end
+        end
+
+        function retval = round(u,n)
+            retval = (round(1/u*n))*u; %(ceil(1/u*n))*u
+        end
+        
+        function retval = isprop(propName)
+            retval = any(strcmp(CVSS3.prop_names, propName));
         end
     end
     
     methods
+        function [ O ] = WithDefaultTemporal(M)
+            O = M.Fill_Parse( CVSS3.default_temporal );
+        end
+        function [ O ] = WithBestTemporal(M)
+            O = M.Fill_Parse( CVSS3.best_temporal );
+        end
+        function [ O ] = WithWorstTemporal(M)
+            O = M.Fill_Parse( CVSS3.worst_temporal );
+        end
+        function [ O ] = WithDefaultEnvironmental(M)
+            O = M.Fill_Parse( CVSS3.default_environmental );
+        end
+        function [ O ] = WithBestEnvironmental(M)
+            O = M.Fill_Parse( CVSS3.best_environmental );
+        end
+        function [ O ] = WithWorstEnvironmental(M)
+            O = M.Fill_Parse( CVSS3.worst_environmental );
+        end
+        
         function retval = Base_Score(M)
             ISC = Impact_Subscore(M);
             
@@ -180,9 +373,9 @@ classdef CVSS3
 
                 switch M.S
                     case 'U'
-                        retval = CVSS3.roundup(min([ISC + Exploitability, 10]));
+                        retval = CVSS3.round(M.RoundUnit, min([ISC + Exploitability, 10]));
                     case 'C'
-                        retval = CVSS3.roundup(min([1.08*(ISC + Exploitability), 10]));
+                        retval = CVSS3.round(M.RoundUnit, min([1.08*(ISC + Exploitability), 10]));
                 end
             end
         end
@@ -216,8 +409,8 @@ classdef CVSS3
             if MISC < 0
                 retval = 0;
             else
-                retval = CVSS3.roundup( ...
-                      CVSS3.roundup(min([adjustfactor * (MISC + Modified_Exploitability_Subscore(M)), 10])) ...
+                retval = CVSS3.round(M.RoundUnit,  ...
+                      CVSS3.round(M.RoundUnit, min([adjustfactor * (MISC + Modified_Exploitability_Subscore(M)), 10])) ...
                     * M.E ...
                     * M.RL ...
                     * M.RC);
@@ -236,6 +429,42 @@ classdef CVSS3
         
         function retval = Modified_Exploitability_Subscore(M)
             retval = 8.22 * M.MAV * M.MAC * M.MPR * M.MUI;
+        end
+        
+        function [ O ] = Fill_Parse( M, input_string )
+        % Reparse returns a new CVSS3 object with additional metrics from
+        % the given string.
+            O = CVSS3.Fill_CVSS_With_Parsed_String( M, input_string );
+            O = CVSS3.Replace_Metrics( O, CVSS3.lookup_table );
+        end
+        
+        function [ O ] = With_Strings( M )
+        % Converts this CVSS parameters to their equivalent string representations when possible.
+            O = CVSS3.Revert_Metrics( M, CVSS3.lookup_table );
+        end
+        
+        function [ str ] = ToString( M, varargin )
+        % Converts this CVSS object to it's equivalent string representation.
+            str = CVSS3.Convert_To_CvssString( M, CVSS3.lookup_table, varargin{:} );
+        end
+        
+        function ForEach( M, f, varargin )
+            names = CVSS3.prop_names;
+            for i=1:size(names,2)
+                k = names(i);
+                k = k{1};
+                val = M.(k);
+                fullVal = val;
+                if ischar(val)
+                    fullVal = CVSS3.map_value_names.(k).(val);
+                end
+                data = struct( ...
+                    'name', k, ...
+                    'value', val, ...
+                    'fullName', CVSS3.map_prop_names.(k), ...
+                    'fullValue', fullVal );
+                f(data, varargin{:});
+            end
         end
     end
 end

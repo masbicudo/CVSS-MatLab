@@ -123,25 +123,54 @@ classdef CVSS2
     end
     
     methods (Static)
-        function [ M ] = Parse_Metrics_String( input_string )
+        function [ M ] = Parse_Metrics_String( input_string, varargin )
         % Parses a CVSS string
         %   This function reads the CVSS string in input_string
         %   and generates a CVSS instance containig the numeric parameters.
-
-            M = CVSS2.Parse_Custom_String(input_string, CVSS2.lookup_table);
-        end
-        
-        function [ M ] = Parse_Custom_String( input_string, map )
-        % Parses a CVSS string
-        %   This function reads the CVSS string in input_string
-        %   and generates a CVSS instance containig custom parameters.
+            opts = struct('IgnoreRequired', 0, 'Map', CVSS2.lookup_table);
+            for a=1:2:nargin-2
+                opts.(varargin{a}) = varargin{a+1};
+            end
 
             M = CVSS2();
             M = CVSS2.Fill_CVSS_With_Parsed_String(M, input_string);
-            M = CVSS2.Replace_Metrics( M, map );
-
+            M = CVSS2.Replace_Metrics( M, opts.Map );
+            
+            % checking required values
+            if ~opts.IgnoreRequired
+                if isempty(M.AV); error('CVSS2 parameter AV is required'); end;
+                if isempty(M.AC); error('CVSS2 parameter AC is required'); end;
+                if isempty(M.Au); error('CVSS2 parameter Au is required'); end;
+                if isempty(M.C ); error('CVSS2 parameter C is required') ; end;
+                if isempty(M.I ); error('CVSS2 parameter I is required') ; end;
+                if isempty(M.A ); error('CVSS2 parameter A is required') ; end;
+            end
         end
 
+        function [ M ] = Parse_CVSS_String( input_string )
+        % Parses a CVSS string
+        %   This function reads the CVSS string in input_string
+        %   and generates a CVSS instance containig the string parameters.
+
+            M = CVSS2.Fill_CVSS_With_Parsed_String( CVSS2(), input_string );
+        end
+        
+        function [ M ] = Fill_CVSS_With_Parsed_String( M, input_string )
+        % Parses a CVSS string
+        %   This function reads the CVSS string in input_string
+        %   and fills a CVSS instance with the string parameters.
+
+            % converting the input_string to a struct
+            input_string1 = strrep(input_string, ' ', '');
+            pieces = strsplit(input_string1,'/');
+            for i=1:size(pieces,1)
+                kv = strsplit(pieces{i},':');
+                if CVSS2.isprop(kv{1})
+                    M.(kv{1}) = upper(kv{2});
+                end
+            end
+        end
+        
         function [ M ] = Replace_Metrics( M, map )
             % replacing string with numbers in the struct fields
             if ischar(M.AV) && ~isempty(M.AV);  M.AV  = map.AV.(M.AV);   end;
@@ -179,7 +208,7 @@ classdef CVSS2
         end
         
         function [ M ] = Revert_Metrics( M, map )
-            names = fieldnames(M);
+            names = fieldnames(map);
             for i=1:size(names,1)
                 k = names{i};
                 if isfield(map, k) && isnumeric(M.(k))
@@ -229,34 +258,6 @@ classdef CVSS2
             end
         end
 
-        function [ M ] = Parse_CVSS_String( input_string )
-        % Parses a CVSS string
-        %   This function reads the CVSS string in input_string
-        %   and generates a CVSS instance containig the string parameters.
-
-            M = CVSS2.Fill_CVSS_With_Parsed_String( CVSS2(), input_string );
-        end
-        
-        function [ M ] = Fill_CVSS_With_Parsed_String( M, input_string )
-        % Parses a CVSS string
-        %   This function reads the CVSS string in input_string
-        %   and fills a CVSS instance with the string parameters.
-
-            % converting the input_string to a struct
-            input_string1 = strrep(input_string, ' ', '');
-            pieces = strsplit(input_string1,'/');
-            for i=1:size(pieces,1)
-                kv = strsplit(pieces{i},':');
-                if CVSS2.isprop(kv{1})
-                    M.(kv{1}) = upper(kv{2});
-                end
-            end
-        end
-        
-        function retval = round_to_1_decimal(n)
-            retval = (round(10*n))/10;
-        end
-        
         function retval = round(u,n)
             retval = (round(1/u*n))*u;
         end
@@ -268,22 +269,22 @@ classdef CVSS2
     
     methods
         function [ O ] = WithDefaultTemporal(M)
-            O = M.Fill_Parse(CVSS2.default_temporal);
+            O = M.Fill_Parse( CVSS2.default_temporal );
         end
         function [ O ] = WithBestTemporal(M)
-            O = M.Fill_Parse(CVSS2.best_temporal);
+            O = M.Fill_Parse( CVSS2.best_temporal );
         end
         function [ O ] = WithWorstTemporal(M)
-            O = M.Fill_Parse(CVSS2.worst_temporal);
+            O = M.Fill_Parse( CVSS2.worst_temporal );
         end
         function [ O ] = WithDefaultEnvironmental(M)
-            O = M.Fill_Parse(CVSS2.default_environmental);
+            O = M.Fill_Parse( CVSS2.default_environmental );
         end
         function [ O ] = WithBestEnvironmental(M)
-            O = M.Fill_Parse(CVSS2.best_environmental);
+            O = M.Fill_Parse( CVSS2.best_environmental );
         end
         function [ O ] = WithWorstEnvironmental(M)
-            O = M.Fill_Parse(CVSS2.worst_environmental);
+            O = M.Fill_Parse( CVSS2.worst_environmental );
         end
         
         function retval = Base_Score(M)
